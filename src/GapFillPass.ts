@@ -161,7 +161,7 @@ export class GapFillPass {
             this.material.uniforms.splatColorTexture.value = colorTexture;
         }
 
-        this.material.uniforms.splatCount.value = packedSplats.length;
+        this.material.uniforms.splatCount.value = packedSplats.numSplats;
 
         // Build spatial acceleration grid
         this.gapFiller.buildSpatialGrid(packedSplats);

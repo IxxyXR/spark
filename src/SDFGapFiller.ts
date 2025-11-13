@@ -159,7 +159,7 @@ export class SDFGapFiller {
     buildSpatialGrid(packedSplats: PackedSplats): void {
         this.packedSplats = packedSplats;
 
-        const splatCount = packedSplats.length;
+        const splatCount = packedSplats.numSplats;
         if (splatCount === 0) return;
 
         // Compute scene bounds
