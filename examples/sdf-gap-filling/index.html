@@ -193,8 +193,9 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // Spark renderer
+    // Spark renderer - add to scene for automatic updates
     const spark = new SparkRenderer({ renderer });
+    scene.add(spark);
 
     // Create render targets
     const renderTarget = new THREE.WebGLRenderTarget(
@@ -350,9 +351,6 @@
 
       // Update controls
       controls.update();
-
-      // Update spark renderer
-      spark.frameUpdate({ scene, camera });
 
       // Render splats to render target
       renderer.setRenderTarget(renderTarget);
