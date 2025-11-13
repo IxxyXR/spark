@@ -76,8 +76,8 @@ export class SDFGapFiller {
     private uniforms: { [key: string]: THREE.IUniform } = {};
 
     constructor(params?: SDFGapFillerParams) {
-        this.updateParams(params);
         this.initUniforms();
+        this.updateParams(params);
     }
 
     /**
@@ -128,6 +128,11 @@ export class SDFGapFiller {
      * Update uniform values
      */
     private updateUniforms(): void {
+        // Safety check: uniforms must be initialized first
+        if (!this.uniforms || Object.keys(this.uniforms).length === 0) {
+            return;
+        }
+
         this.uniforms.sdfGapFillEnabled.value = this.enabled;
         this.uniforms.sdfAlphaThreshold.value = this.alphaThreshold;
         this.uniforms.sdfGradientThreshold.value = this.gradientThreshold;
