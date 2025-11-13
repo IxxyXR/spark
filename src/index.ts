@@ -43,6 +43,13 @@ export {
 } from "./SplatEdit";
 
 export {
+  SDFGapFiller,
+  type SDFGapFillerParams,
+} from "./SDFGapFiller";
+
+export { GapFillPass } from "./GapFillPass";
+
+export {
   constructGrid,
   constructAxes,
   constructSpherePoints,

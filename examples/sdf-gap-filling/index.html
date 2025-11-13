@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spark • SDF-Splats Gap Filling</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      max-width: 300px;
+      z-index: 100;
+    }
+
+    h2 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      color: #4fc3f7;
+    }
+
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: #ccc;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    .value-display {
+      display: inline-block;
+      min-width: 50px;
+      text-align: right;
+      font-size: 12px;
+      color: #fff;
+    }
+
+    button {
+      background: #4fc3f7;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-top: 8px;
+    }
+
+    button:hover {
+      background: #29b6f6;
+    }
+
+    #info {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .preset-group {
+      display: flex;
+      gap: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="controls">
+    <h2>SDF-Splats Gap Filling</h2>
+
+    <div class="control-group">
+      <label>
+        <input type="checkbox" id="enableGapFill" checked>
+        Enable Gap Filling
+      </label>
+    </div>
+
+    <div class="control-group">
+      <label>
+        <input type="checkbox" id="debugMode">
+        Debug Mode (Show Gaps in Red)
+      </label>
+    </div>
+
+    <div class="control-group">
+      <label>
+        Alpha Threshold: <span class="value-display" id="alphaValue">0.20</span>
+      </label>
+      <input type="range" id="alphaThreshold" min="0" max="1" step="0.01" value="0.20">
+    </div>
+
+    <div class="control-group">
+      <label>
+        Gradient Threshold: <span class="value-display" id="gradientValue">0.05</span>
+      </label>
+      <input type="range" id="gradientThreshold" min="0" max="0.2" step="0.01" value="0.05">
+    </div>
+
+    <div class="control-group">
+      <label>
+        Max Steps: <span class="value-display" id="stepsValue">64</span>
+      </label>
+      <input type="range" id="maxSteps" min="16" max="128" step="8" value="64">
+    </div>
+
+    <div class="control-group">
+      <label>
+        Raymarch Radius: <span class="value-display" id="radiusValue">0.50</span>
+      </label>
+      <input type="range" id="raymarchRadius" min="0.1" max="2.0" step="0.1" value="0.5">
+    </div>
+
+    <div class="control-group">
+      <label>
+        Safety Factor: <span class="value-display" id="safetyValue">0.80</span>
+      </label>
+      <input type="range" id="safetyFactor" min="0.5" max="1.0" step="0.05" value="0.80">
+    </div>
+
+    <div class="preset-group">
+      <button id="highQuality">High Quality</button>
+      <button id="balanced">Balanced</button>
+      <button id="performance">Performance</button>
+    </div>
+  </div>
+
+  <div id="info">
+    <strong>SDF-Splats:</strong> Hybrid volumetric gap filling for 3D Gaussian Splatting<br>
+    <span id="fps">FPS: --</span> |
+    Drag to rotate • Scroll to zoom
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/examples/js/vendor/three/build/three.module.js",
+        "@sparkjsdev/spark": "/dist/spark.module.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "/examples/js/vendor/three/examples/jsm/controls/OrbitControls.js";
+    import { SparkRenderer, SplatMesh, GapFillPass } from "@sparkjsdev/spark";
+    import { getAssetFileURL } from "/examples/js/get-asset-url.js";
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a2e);
+
+    const camera = new THREE.PerspectiveCamera(
+      60,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(0, 0, 5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // Orbit controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Spark renderer
+    const spark = new SparkRenderer({ renderer });
+
+    // Create render targets
+    const renderTarget = new THREE.WebGLRenderTarget(
+      window.innerWidth,
+      window.innerHeight,
+      {
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter
+      }
+    );
+
+    const gapFillTarget = new THREE.WebGLRenderTarget(
+      window.innerWidth,
+      window.innerHeight,
+      {
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter
+      }
+    );
+
+    // Create gap fill pass
+    const gapFillPass = new GapFillPass(renderer, {
+      enabled: true,
+      alphaThreshold: 0.2,
+      gradientThreshold: 0.05,
+      densityThreshold: 0.5,
+      maxSteps: 64,
+      maxDistance: 10.0,
+      safetyFactor: 0.8,
+      surfaceEpsilon: 0.001,
+      raymarchRadius: 0.5,
+      gridResolution: 64,
+      debug: false
+    });
+
+    gapFillPass.setOutputTarget(gapFillTarget);
+
+    // Load splat mesh
+    const splatURL = await getAssetFileURL("butterfly.spz");
+    const splatMesh = new SplatMesh({ url: splatURL });
+    splatMesh.position.set(0, 0, 0);
+    scene.add(splatMesh);
+
+    // Update gap fill pass with splat data
+    // Note: In production, you would extract data textures from the renderer
+    // For this example, we'll use the packed splats directly
+    if (splatMesh.packedSplats) {
+      gapFillPass.updateSplatData(splatMesh.packedSplats);
+    }
+
+    // Display quad for final result
+    const displayScene = new THREE.Scene();
+    const displayCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const displayGeometry = new THREE.PlaneGeometry(2, 2);
+    const displayMaterial = new THREE.MeshBasicMaterial({ map: gapFillTarget.texture });
+    const displayQuad = new THREE.Mesh(displayGeometry, displayMaterial);
+    displayScene.add(displayQuad);
+
+    // UI Controls
+    const enableGapFill = document.getElementById('enableGapFill');
+    const debugMode = document.getElementById('debugMode');
+    const alphaThreshold = document.getElementById('alphaThreshold');
+    const gradientThreshold = document.getElementById('gradientThreshold');
+    const maxSteps = document.getElementById('maxSteps');
+    const raymarchRadius = document.getElementById('raymarchRadius');
+    const safetyFactor = document.getElementById('safetyFactor');
+
+    function updateParams() {
+      gapFillPass.updateParams({
+        enabled: enableGapFill.checked,
+        debug: debugMode.checked,
+        alphaThreshold: parseFloat(alphaThreshold.value),
+        gradientThreshold: parseFloat(gradientThreshold.value),
+        maxSteps: parseInt(maxSteps.value),
+        raymarchRadius: parseFloat(raymarchRadius.value),
+        safetyFactor: parseFloat(safetyFactor.value)
+      });
+
+      // Update displays
+      document.getElementById('alphaValue').textContent = alphaThreshold.value;
+      document.getElementById('gradientValue').textContent = gradientThreshold.value;
+      document.getElementById('stepsValue').textContent = maxSteps.value;
+      document.getElementById('radiusValue').textContent = raymarchRadius.value;
+      document.getElementById('safetyValue').textContent = safetyFactor.value;
+    }
+
+    enableGapFill.addEventListener('change', updateParams);
+    debugMode.addEventListener('change', updateParams);
+    alphaThreshold.addEventListener('input', updateParams);
+    gradientThreshold.addEventListener('input', updateParams);
+    maxSteps.addEventListener('input', updateParams);
+    raymarchRadius.addEventListener('input', updateParams);
+    safetyFactor.addEventListener('input', updateParams);
+
+    // Preset buttons
+    document.getElementById('highQuality').addEventListener('click', () => {
+      alphaThreshold.value = 0.25;
+      maxSteps.value = 96;
+      raymarchRadius.value = 0.8;
+      safetyFactor.value = 0.7;
+      updateParams();
+    });
+
+    document.getElementById('balanced').addEventListener('click', () => {
+      alphaThreshold.value = 0.2;
+      maxSteps.value = 64;
+      raymarchRadius.value = 0.5;
+      safetyFactor.value = 0.8;
+      updateParams();
+    });
+
+    document.getElementById('performance').addEventListener('click', () => {
+      alphaThreshold.value = 0.15;
+      maxSteps.value = 32;
+      raymarchRadius.value = 0.3;
+      safetyFactor.value = 0.9;
+      updateParams();
+    });
+
+    // Window resize
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderTarget.setSize(window.innerWidth, window.innerHeight);
+      gapFillTarget.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // FPS counter
+    let lastTime = performance.now();
+    let frames = 0;
+    let fps = 0;
+
+    function updateFPS() {
+      frames++;
+      const currentTime = performance.now();
+      if (currentTime >= lastTime + 1000) {
+        fps = Math.round((frames * 1000) / (currentTime - lastTime));
+        document.getElementById('fps').textContent = `FPS: ${fps}`;
+        frames = 0;
+        lastTime = currentTime;
+      }
+    }
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Update controls
+      controls.update();
+
+      // Update spark renderer
+      spark.frameUpdate({ scene, camera });
+
+      // Render splats to render target
+      renderer.setRenderTarget(renderTarget);
+      renderer.render(scene, camera);
+
+      // Apply gap filling (if enabled)
+      if (enableGapFill.checked) {
+        gapFillPass.render(camera, renderTarget.texture);
+
+        // Display gap-filled result
+        renderer.setRenderTarget(null);
+        renderer.render(displayScene, displayCamera);
+      } else {
+        // Display original without gap filling
+        renderer.setRenderTarget(null);
+        displayMaterial.map = renderTarget.texture;
+        renderer.render(displayScene, displayCamera);
+      }
+
+      updateFPS();
+    }
+
+    animate();
+  </script>
+</body>
+
+</html>
