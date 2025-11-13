@@ -46,6 +46,9 @@ export class GapFillPass {
         // Create gap filler with parameters
         this.gapFiller = new SDFGapFiller(params);
 
+        // Set enabled state from params (default to false if not specified)
+        this.enabled = params?.enabled ?? false;
+
         // Create scene and camera for post-processing
         this.scene = new THREE.Scene();
         this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -112,6 +115,11 @@ export class GapFillPass {
      * Update gap filler parameters
      */
     updateParams(params: SDFGapFillerParams): void {
+        // Update enabled state if provided
+        if (params.enabled !== undefined) {
+            this.enabled = params.enabled;
+        }
+
         this.gapFiller.updateParams(params);
         this.syncUniforms();
     }

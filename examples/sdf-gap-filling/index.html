@@ -237,6 +237,10 @@
 
     gapFillPass.setOutputTarget(gapFillTarget);
 
+    console.log('GapFillPass created:', gapFillPass);
+    console.log('Gap filler enabled:', gapFillPass.gapFillerParams.enabled);
+    console.log('Debug mode:', gapFillPass.gapFillerParams.debug);
+
     // Load splat mesh
     const splatURL = await getAssetFileURL("butterfly.spz");
     const splatMesh = new SplatMesh({ url: splatURL });
@@ -276,6 +280,13 @@
         maxSteps: parseInt(maxSteps.value),
         raymarchRadius: parseFloat(raymarchRadius.value),
         safetyFactor: parseFloat(safetyFactor.value)
+      });
+
+      console.log('Parameters updated:', {
+        enabled: enableGapFill.checked,
+        debug: debugMode.checked,
+        alphaThreshold: alphaThreshold.value,
+        gradientThreshold: gradientThreshold.value
       });
 
       // Update displays

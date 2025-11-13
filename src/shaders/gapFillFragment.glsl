@@ -284,9 +284,37 @@ void main() {
 
     // Debug mode: visualize gaps in red
     if (sdfDebugMode) {
-        if (isGap(vUv, splatColor.a)) {
+        // Simple debug: show alpha values
+        // Red = gaps (low alpha)
+        // Green = gradient boundaries
+        // Original = well-covered areas
+
+        float alpha = splatColor.a;
+
+        // Sample neighbors for gradient
+        float alphaR = texture(splatRenderTexture, vUv + vec2(texelSize.x, 0.0)).a;
+        float alphaL = texture(splatRenderTexture, vUv - vec2(texelSize.x, 0.0)).a;
+        float alphaU = texture(splatRenderTexture, vUv + vec2(0.0, texelSize.y)).a;
+        float alphaD = texture(splatRenderTexture, vUv - vec2(0.0, texelSize.y)).a;
+
+        float gradX = abs(alphaR - alphaL);
+        float gradY = abs(alphaU - alphaD);
+        float gradient = max(gradX, gradY);
+
+        bool isLowAlpha = alpha < sdfAlphaThreshold;
+        bool isHighGradient = gradient > sdfGradientThreshold;
+
+        if (isLowAlpha && isHighGradient) {
+            // Gap detected - show bright red
             fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        } else if (isLowAlpha) {
+            // Low alpha but no gradient - show dark red
+            fragColor = vec4(0.5, 0.0, 0.0, 1.0);
+        } else if (isHighGradient) {
+            // High gradient at boundary - show green
+            fragColor = vec4(0.0, 1.0, 0.0, 1.0);
         } else {
+            // Well-covered - show original
             fragColor = splatColor;
         }
         return;
